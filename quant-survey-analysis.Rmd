@@ -1,0 +1,173 @@
+---
+title: "Quantitative survey analysis"
+author: "George Kinnear"
+date: "2025-03-19"
+output:
+  github_document:
+    html_preview: true
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.path='figs-web/')
+
+library(tidyverse)
+
+# set the default plot style
+theme_set(theme_minimal(base_size = 14))
+```
+
+# Example: two-stage exams
+
+```{r}
+survey_data_raw <- read_csv("twostage_study1_survey.csv", show_col_types = FALSE)
+
+survey_data_clean <- survey_data_raw %>% 
+  separate_wider_position(Process, widths = c("Q1" = 1, "Q2" = 1, "Q3" = 1, "Q4" = 1, "Q5" = 1, "Q6" = 1)) %>% 
+  separate_wider_position(Discussion, widths = c("Q7" = 1, "Q8" = 1, "Q9" = 1, "Q10" = 1)) %>% 
+  filter(!is.na(Q1))
+
+survey_data_clean
+```
+
+```{r twostage-likert}
+choice_levels <- c(
+  "Strongly disagree",
+  "Somewhat disagree",
+  "Neither agree nor disagree",
+  "Somewhat agree",
+  "Strongly agree"
+)
+
+item_texts <- tibble(
+  item = paste0("Q", c(1:10)),
+  text = c(
+    "easy to understand",
+    "more stressful",
+    "fair",
+    "helped me to learn",
+    "made me less nervous",
+    "should be used more",
+    "I was an active participant",
+    "I learned from others",
+    "every group member contributed",
+    "I felt more confident"
+  )
+) %>% pivot_wider(names_from = item, values_from = text) %>%
+  as.list()
+
+ggstats::gglikert(
+  data = survey_data_clean %>%
+    select(-AnonID) %>% 
+    # put the choices in the correct order!
+    mutate(across(c(Q1:Q10), ~ factor(
+      .x,
+      levels = c(5:1), # make this c(1:5) if the choices are in the other direction
+      labels = choice_levels
+    ))), 
+  variable_labels = item_texts
+)
+```
+
+# Example: course choices
+
+```{r}
+survey_responses <- read_csv("ANON_course-choices-and-gender.csv", show_col_types = FALSE)
+survey_responses
+```
+```{r}
+course_types_long <- survey_responses %>% 
+  separate_longer_delim(cols = courses, delim = ";") %>% 
+  filter(courses != "")
+course_types_long
+```
+
+Number of students picking each option:
+
+```{r}
+course_types_long %>% 
+  count(courses)
+```
+
+
+
+As a bar graph:
+
+```{r course-types-bar}
+course_types_long %>% 
+  count(courses) %>% 
+  ggplot(aes(x = courses, y = n)) +
+  geom_bar(stat = "identity") +
+  coord_flip()
+```
+
+
+
+Reorder the bars from biggest to smallest:
+
+```{r course-types-bar-2}
+course_types_long %>% 
+  count(courses) %>% 
+  mutate(courses = fct_reorder(courses, n)) %>% 
+  ggplot(aes(x = courses, y = n)) +
+  geom_bar(stat = "identity") +
+  coord_flip()
+```
+
+Use `ggupset` to look at combinations:
+
+```{r course-types-ggupset}
+course_types_long %>% 
+  summarise(courses = list(courses), .by = student) %>% 
+  ggplot(aes(x = courses)) +
+    geom_bar() +
+    ggupset::scale_x_upset() +
+    labs(x = "Course combinations", y = "Number of students")
+```
+
+Summarise the overall "focus" for each student:
+
+```{r course-focus-bar}
+curricular_focus <- survey_responses %>% 
+  mutate(focus = case_when(
+    courses == "Pure mathematics;" ~ "Pure",
+    str_detect(courses, "Pure") ~ "Mix",
+    .default = "Non-pure"
+  ) %>%
+  fct_relevel("Pure", "Mix", "Non-pure"))
+
+curricular_focus %>% 
+  ggplot(aes(x = focus)) +
+  geom_bar()
+```
+
+Split the data by gender:
+
+```{r course-focus-by-gender}
+curricular_focus_by_gender <- curricular_focus %>% 
+  filter(!is.na(gender_group)) %>% 
+  count(gender_group, focus) %>% 
+  mutate(percentage = n / sum(n) * 100, .by = gender_group) 
+
+curricular_focus_by_gender %>% 
+  ggplot(aes(x = gender_group, y = percentage, fill = focus)) +
+  geom_bar(stat = "identity") +
+  coord_flip()
+```
+
+Tweak the plot to make it clearer:
+
+```{r course-focus-by-gender-2}
+curricular_focus_by_gender %>% 
+  mutate(label_pos = 1 - (cumsum(percentage/100) - (0.5 * percentage/100)), .by = gender_group) %>% 
+  ggplot(aes(x = gender_group, y = percentage/100, fill = focus)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n, y = label_pos)) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_viridis_d("Focus", option = "viridis", begin = 0.25, end = 0.75, guide = guide_legend(reverse = TRUE)) +
+  labs(x = "", y = "") +
+  theme(legend.position = "top")
+```
