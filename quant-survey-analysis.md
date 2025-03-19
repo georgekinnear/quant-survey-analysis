@@ -3,6 +3,15 @@ Quantitative survey analysis
 George Kinnear
 2025-03-19
 
+Useful resources for working with R:
+
+- Nordmann, E., McAleer, P., Toivo, W., Paterson, H. & DeBruine, L.
+  (2022). Data visualisation using R, for researchers who don’t use R.
+  Advances in Methods and Practices in Psychological Science.
+  <https://doi.org/10.1177/25152459221074654>
+
+- R for Data Science (2e) <https://r4ds.hadley.nz/>
+
 # Example: two-stage exams
 
 ``` r
